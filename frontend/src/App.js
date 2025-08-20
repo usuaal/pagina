@@ -191,6 +191,86 @@ function App() {
     }
   };
 
+  const startCameraScanner = () => {
+    setScannerActive(true);
+    setTimeout(() => {
+      if (scannerRef.current) {
+        Quagga.init({
+          inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: scannerRef.current,
+            constraints: {
+              width: 480,
+              height: 320,
+              facingMode: "environment"
+            }
+          },
+          locator: {
+            patchSize: "medium",
+            halfSample: true
+          },
+          numOfWorkers: 2,
+          frequency: 10,
+          decoder: {
+            readers: [
+              "code_128_reader",
+              "ean_reader",
+              "ean_8_reader",
+              "code_39_reader"
+            ]
+          },
+          locate: true
+        }, (err) => {
+          if (err) {
+            console.error('Error starting scanner:', err);
+            alert('Error al inicializar el escáner. Por favor verifica los permisos de cámara.');
+            setScannerActive(false);
+            return;
+          }
+          Quagga.start();
+        });
+
+        Quagga.onDetected((result) => {
+          const code = result.codeResult.code;
+          console.log('Barcode detected:', code);
+          stopCameraScanner();
+          searchProductByBarcode(code);
+        });
+      }
+    }, 100);
+  };
+
+  const stopCameraScanner = () => {
+    if (scannerActive) {
+      Quagga.stop();
+      setScannerActive(false);
+    }
+  };
+
+  const generateBarcodeImage = (code, format) => {
+    if (barcodeRef.current && code) {
+      try {
+        JsBarcode(barcodeRef.current, code, {
+          format: format,
+          width: 2,
+          height: 100,
+          displayValue: true,
+          fontSize: 12,
+          textMargin: 5
+        });
+      } catch (error) {
+        console.error('Error generating barcode:', error);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (generatedBarcode) {
+      generateBarcodeImage(generatedBarcode, barcodeFormat);
+    }
+  }, [generatedBarcode, barcodeFormat]);
+
   const Navigation = () => (
     <nav className="bg-blue-900 text-white p-4">
       <div className="container mx-auto flex justify-between items-center">
