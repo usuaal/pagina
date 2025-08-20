@@ -273,6 +273,15 @@ function App() {
     }
   }, [generatedBarcode, barcodeFormat]);
 
+  // Cleanup scanner on unmount
+  useEffect(() => {
+    return () => {
+      if (scannerActive) {
+        stopCameraScanner();
+      }
+    };
+  }, [scannerActive]);
+
   const Navigation = () => (
     <nav className="bg-blue-900 text-white p-4">
       <div className="container mx-auto flex justify-between items-center">
