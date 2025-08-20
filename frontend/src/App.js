@@ -643,23 +643,113 @@ function App() {
           </div>
         </div>
 
-        {/* Camera Scanner (Placeholder) */}
+        {/* Camera Scanner */}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-xl font-semibold mb-4 flex items-center">
             <span className="mr-2">📷</span>
             Escáner con Cámara
           </h3>
           <div className="text-center">
-            <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-8 mb-4">
-              <p className="text-gray-500">Escáner con cámara será implementado próximamente</p>
-              <p className="text-sm text-gray-400 mt-2">Requiere librerías de escáner adicionales</p>
+            {!scannerActive ? (
+              <>
+                <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-8 mb-4">
+                  <p className="text-gray-500">Presiona el botón para activar la cámara</p>
+                  <p className="text-sm text-gray-400 mt-2">Asegúrate de permitir el acceso a la cámara</p>
+                </div>
+                <button
+                  onClick={startCameraScanner}
+                  className="bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700"
+                >
+                  Activar Cámara
+                </button>
+              </>
+            ) : (
+              <>
+                <div 
+                  ref={scannerRef} 
+                  className="scanner-viewport bg-black rounded-lg mb-4 relative overflow-hidden"
+                  style={{ height: '300px' }}
+                >
+                  <div className="scanner-overlay"></div>
+                </div>
+                <button
+                  onClick={stopCameraScanner}
+                  className="bg-red-600 text-white py-3 px-6 rounded-lg hover:bg-red-700"
+                >
+                  Detener Cámara
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Barcode Generator Section */}
+      <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
+        <h3 className="text-xl font-semibold mb-4">Generador de Códigos de Barras</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Selecciona el formato:
+            </label>
+            <div className="flex space-x-3 mb-4">
+              <button
+                onClick={() => generateBarcode('EAN13')}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                EAN-13
+              </button>
+              <button
+                onClick={() => generateBarcode('UPC')}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                UPC
+              </button>
+              <button
+                onClick={() => generateBarcode('CODE128')}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                Code 128
+              </button>
             </div>
-            <button
-              className="bg-gray-400 text-white py-3 px-6 rounded-lg cursor-not-allowed"
-              disabled
-            >
-              Activar Cámara (Próximamente)
-            </button>
+            {generatedBarcode && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 mb-2">Código generado:</p>
+                <p className="font-mono text-lg font-bold">{generatedBarcode}</p>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedBarcode);
+                    alert('Código copiado al portapapeles');
+                  }}
+                  className="mt-2 text-sm bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
+                >
+                  Copiar
+                </button>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Vista previa del código:
+            </label>
+            <div className="barcode-container">
+              {generatedBarcode ? (
+                <>
+                  <canvas ref={barcodeRef} className="mb-2"></canvas>
+                  <p className="barcode-text">{generatedBarcode}</p>
+                  <button
+                    onClick={() => window.print()}
+                    className="mt-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm"
+                  >
+                    Imprimir
+                  </button>
+                </>
+              ) : (
+                <div className="h-32 flex items-center justify-center text-gray-400">
+                  Genera un código para ver la vista previa
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
