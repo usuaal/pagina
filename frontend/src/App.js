@@ -35,7 +35,11 @@ function App() {
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerType, setScannerType] = useState('manual'); // 'manual' or 'camera'
   const [manualBarcode, setManualBarcode] = useState('');
+  const [generatedBarcode, setGeneratedBarcode] = useState('');
+  const [barcodeFormat, setBarcodeFormat] = useState('CODE128');
   const videoRef = useRef(null);
+  const scannerRef = useRef(null);
+  const barcodeRef = useRef(null);
   
   const API_URL = process.env.REACT_APP_BACKEND_URL;
 
