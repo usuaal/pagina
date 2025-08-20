@@ -11,6 +11,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Dark mode support */
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: #111827;
+  color: #f9fafb;
+}
+
 /* Enhanced animations */
 .fade-in {
   animation: fadeIn 0.5s ease-in-out;
@@ -29,6 +39,10 @@ button {
 button:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+button:active {
+  transform: translateY(0);
 }
 
 /* Enhanced form inputs */
@@ -54,8 +68,16 @@ table th {
   z-index: 10;
 }
 
+.dark table th {
+  background: #374151;
+}
+
 table tr:hover {
   background-color: rgba(59, 130, 246, 0.05);
+}
+
+.dark table tr:hover {
+  background-color: rgba(75, 85, 99, 0.5);
 }
 
 /* Enhanced cards */
@@ -165,12 +187,15 @@ nav button.active::after {
 
 /* Barcode display */
 .barcode-container {
-  background: white;
   padding: 1rem;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
   text-align: center;
   font-family: 'Courier New', monospace;
+}
+
+.dark .barcode-container {
+  border: 1px solid #4b5563;
 }
 
 .barcode-text {
@@ -179,6 +204,10 @@ nav button.active::after {
   font-weight: bold;
   color: #374151;
   margin-top: 0.5rem;
+}
+
+.dark .barcode-text {
+  color: #f9fafb;
 }
 
 /* Dashboard stats */
@@ -222,13 +251,25 @@ nav button.active::after {
   background: #f1f5f9;
 }
 
+.dark ::-webkit-scrollbar-track {
+  background: #374151;
+}
+
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 4px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #6b7280;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 /* Print styles for barcodes */
@@ -241,6 +282,11 @@ nav button.active::after {
     page-break-inside: avoid;
     margin: 1cm;
     text-align: center;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
   }
 }
 
@@ -255,6 +301,16 @@ nav button.active::after {
   background-color: #fee2e2;
   color: #991b1b;
   border-left: 4px solid #ef4444;
+}
+
+.dark .movement-entry {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.dark .movement-exit {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
 }
 
 /* Enhanced focus states */
@@ -276,6 +332,11 @@ nav button.active::after {
   border-left: 4px solid #22c55e;
   z-index: 1000;
   animation: slideIn 0.3s ease-out;
+}
+
+.dark .toast {
+  background: #374151;
+  color: #f9fafb;
 }
 
 @keyframes slideIn {
@@ -304,4 +365,115 @@ nav button.active::after {
   .mobile-text-center {
     text-align: center;
   }
+
+  /* Adjust navigation for mobile */
+  nav .container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  nav .flex:first-child {
+    margin-bottom: 1rem;
+  }
+
+  /* Stack navigation buttons vertically on mobile */
+  nav .flex:last-child {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+}
+
+/* Dark mode transitions */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Enhanced dashboard cards */
+.dashboard-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.6s;
+}
+
+.dashboard-card:hover::before {
+  transform: translateX(100%);
+}
+
+/* Scanner camera styles */
+.scanner-viewport video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-viewport canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Enhanced button styles */
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border: none;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: none;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-success:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: none;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
 }

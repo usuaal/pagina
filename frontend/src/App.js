@@ -9,6 +9,7 @@ function App() {
   const [movements, setMovements] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({});
   const [loading, setLoading] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   
   // Product form states
   const [productForm, setProductForm] = useState({
@@ -37,6 +38,7 @@ function App() {
   const [manualBarcode, setManualBarcode] = useState('');
   const [generatedBarcode, setGeneratedBarcode] = useState('');
   const [barcodeFormat, setBarcodeFormat] = useState('CODE128');
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const videoRef = useRef(null);
   const scannerRef = useRef(null);
   const barcodeRef = useRef(null);
@@ -49,6 +51,15 @@ function App() {
     loadMovements();
     loadDashboard();
   }, []);
+
+  // Dark mode effect
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   const loadProducts = async () => {
     try {
@@ -133,6 +144,27 @@ function App() {
     setLoading(false);
   };
 
+  const deleteProduct = async (productId, productName) => {
+    if (window.confirm(`¿Estás seguro de que quieres eliminar el producto "${productName}"?`)) {
+      try {
+        const response = await fetch(`${API_URL}/api/products/${productId}`, {
+          method: 'DELETE',
+        });
+        
+        if (response.ok) {
+          loadProducts();
+          loadDashboard();
+          alert('Producto eliminado exitosamente');
+        } else {
+          alert('Error al eliminar el producto');
+        }
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('Error al eliminar el producto');
+      }
+    }
+  };
+
   const createMovement = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -175,6 +207,7 @@ function App() {
       const response = await fetch(`${API_URL}/api/products/barcode/${barcode}`);
       if (response.ok) {
         const product = await response.json();
+        setSelectedProduct(product);
         setMovementForm({ ...movementForm, product_id: product.id, barcode_scanned: barcode });
         alert(`Producto encontrado: ${product.name}`);
       } else {
@@ -282,34 +315,137 @@ function App() {
     };
   }, [scannerActive]);
 
+  const printInventory = () => {
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Reporte de Inventario</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 10px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f3f4f6; }
+            .summary { background-color: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+          </style>
+        </head>
+        <body>
+          <h1>Reporte de Inventario</h1>
+          <p><strong>Fecha:</strong> ${new Date().toLocaleDateString()}</p>
+          
+          <div class="summary">
+            <h3>Resumen</h3>
+            <p><strong>Total de Productos:</strong> ${dashboardStats.total_products || 0}</p>
+            <p><strong>Productos con Stock Bajo:</strong> ${dashboardStats.low_stock_count || 0}</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Código de Barras</th>
+                <th>Categoría</th>
+                <th>Stock Piezas</th>
+                <th>Stock Pallets</th>
+                <th>Precio</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${products.map(product => `
+                <tr>
+                  <td>${product.name}</td>
+                  <td>${product.barcode}</td>
+                  <td>${product.category}</td>
+                  <td>${product.current_stock_pieces}</td>
+                  <td>${product.current_stock_pallets}</td>
+                  <td>$${product.price_per_piece}</td>
+                  <td>${product.current_stock_pieces <= product.min_stock_alert ? 'Stock Bajo' : 'Normal'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+    
+    const printWindow = window.open('', '', 'width=800,height=600');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
   const Navigation = () => (
-    <nav className="bg-blue-900 text-white p-4">
-      <div className="container mx-auto flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Sistema de Inventario</h1>
-        <div className="space-x-4">
+    <nav className={`${darkMode ? 'bg-gray-800' : 'bg-blue-900'} text-white shadow-lg`}>
+      <div className="container mx-auto px-4">
+        {/* Header with image and title */}
+        <div className="flex items-center justify-between py-4">
+          <div className="flex items-center space-x-4">
+            <img 
+              src="https://images.unsplash.com/photo-1553413077-190dd305871c" 
+              alt="Warehouse"
+              className="w-12 h-12 rounded-lg object-cover"
+            />
+            <div>
+              <h1 className="text-2xl font-bold">Sistema de Inventario</h1>
+              <p className="text-sm opacity-80">Control completo con códigos de barras</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            {/* Dark mode toggle */}
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-2 rounded-lg hover:bg-opacity-20 hover:bg-white transition-colors"
+              title="Cambiar tema"
+            >
+              {darkMode ? '☀️' : '🌙'}
+            </button>
+          </div>
+        </div>
+        
+        {/* Navigation buttons */}
+        <div className="flex space-x-4 pb-4">
           <button 
             onClick={() => setCurrentView('dashboard')}
-            className={`px-4 py-2 rounded ${currentView === 'dashboard' ? 'bg-blue-700' : 'hover:bg-blue-800'}`}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              currentView === 'dashboard' 
+                ? (darkMode ? 'bg-gray-700' : 'bg-blue-700') 
+                : 'hover:bg-opacity-20 hover:bg-white'
+            }`}
           >
-            Dashboard
+            📊 Dashboard
           </button>
           <button 
             onClick={() => setCurrentView('products')}
-            className={`px-4 py-2 rounded ${currentView === 'products' ? 'bg-blue-700' : 'hover:bg-blue-800'}`}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              currentView === 'products' 
+                ? (darkMode ? 'bg-gray-700' : 'bg-blue-700')
+                : 'hover:bg-opacity-20 hover:bg-white'
+            }`}
           >
-            Productos
+            📦 Productos
           </button>
           <button 
             onClick={() => setCurrentView('movements')}
-            className={`px-4 py-2 rounded ${currentView === 'movements' ? 'bg-blue-700' : 'hover:bg-blue-800'}`}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              currentView === 'movements' 
+                ? (darkMode ? 'bg-gray-700' : 'bg-blue-700')
+                : 'hover:bg-opacity-20 hover:bg-white'
+            }`}
           >
-            Movimientos
+            📋 Movimientos
           </button>
           <button 
             onClick={() => setCurrentView('scanner')}
-            className={`px-4 py-2 rounded ${currentView === 'scanner' ? 'bg-blue-700' : 'hover:bg-blue-800'}`}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              currentView === 'scanner' 
+                ? (darkMode ? 'bg-gray-700' : 'bg-blue-700')
+                : 'hover:bg-opacity-20 hover:bg-white'
+            }`}
           >
-            Escáner
+            📱 Escáner
           </button>
         </div>
       </div>
@@ -317,62 +453,155 @@ function App() {
   );
 
   const Dashboard = () => (
-    <div className="p-6">
-      <h2 className="text-3xl font-bold mb-6 text-gray-800">Dashboard de Inventario</h2>
+    <div className={`p-6 min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50'}`}>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold">Dashboard de Inventario</h2>
+        <button
+          onClick={printInventory}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
+        >
+          <span>🖨️</span>
+          <span>Imprimir Inventario</span>
+        </button>
+      </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-blue-100 p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold text-blue-800">Total Productos</h3>
-          <p className="text-3xl font-bold text-blue-900">{dashboardStats.total_products || 0}</p>
+      {/* Enhanced Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg border-l-4 border-blue-500`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-blue-600">Total Productos</h3>
+              <p className="text-3xl font-bold">{dashboardStats.total_products || 0}</p>
+            </div>
+            <div className="text-4xl">📦</div>
+          </div>
         </div>
         
-        <div className="bg-green-100 p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold text-green-800">Total Movimientos</h3>
-          <p className="text-3xl font-bold text-green-900">{dashboardStats.total_movements || 0}</p>
+        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg border-l-4 border-green-500`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-green-600">Total Movimientos</h3>
+              <p className="text-3xl font-bold">{dashboardStats.total_movements || 0}</p>
+            </div>
+            <div className="text-4xl">📊</div>
+          </div>
         </div>
         
-        <div className="bg-red-100 p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold text-red-800">Stock Bajo</h3>
-          <p className="text-3xl font-bold text-red-900">{dashboardStats.low_stock_count || 0}</p>
+        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg border-l-4 border-red-500`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-red-600">Stock Bajo</h3>
+              <p className="text-3xl font-bold">{dashboardStats.low_stock_count || 0}</p>
+            </div>
+            <div className="text-4xl">⚠️</div>
+          </div>
+        </div>
+
+        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg border-l-4 border-purple-500`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-purple-600">Acciones Rápidas</h3>
+              <div className="flex space-x-2 mt-2">
+                <button 
+                  onClick={() => setCurrentView('scanner')}
+                  className="bg-purple-100 text-purple-800 px-3 py-1 rounded text-sm hover:bg-purple-200"
+                >
+                  Escáner
+                </button>
+              </div>
+            </div>
+            <div className="text-4xl">⚡</div>
+          </div>
         </div>
       </div>
 
-      {dashboardStats.low_stock_products && dashboardStats.low_stock_products.length > 0 && (
-        <div className="bg-yellow-50 p-6 rounded-lg shadow-md mb-6">
-          <h3 className="text-lg font-semibold text-yellow-800 mb-3">Productos con Stock Bajo</h3>
-          <ul className="space-y-2">
-            {dashboardStats.low_stock_products.map((product, index) => (
-              <li key={index} className="text-yellow-700">• {product}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <button
+          onClick={() => setCurrentView('scanner')}
+          className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-xl hover:from-green-600 hover:to-green-700 transform hover:scale-105 transition-all"
+        >
+          <div className="text-3xl mb-2">📱</div>
+          <h3 className="text-lg font-semibold">Escanear Producto</h3>
+          <p className="text-sm opacity-90">Usar cámara o manual</p>
+        </button>
 
-      {dashboardStats.recent_movements && (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Movimientos Recientes</h3>
-          <div className="space-y-3">
-            {dashboardStats.recent_movements.map((movement, index) => (
-              <div key={index} className="border-l-4 border-blue-500 pl-4 py-2">
-                <p className="font-medium">{movement.movement_type === 'entry' ? 'Entrada' : 'Salida'}</p>
-                <p className="text-sm text-gray-600">
-                  Piezas: {movement.quantity_pieces} | Pallets: {movement.quantity_pallets}
-                </p>
-                <p className="text-xs text-gray-500">{new Date(movement.created_at).toLocaleString()}</p>
-              </div>
-            ))}
+        <button
+          onClick={() => setCurrentView('products')}
+          className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-xl hover:from-blue-600 hover:to-blue-700 transform hover:scale-105 transition-all"
+        >
+          <div className="text-3xl mb-2">➕</div>
+          <h3 className="text-lg font-semibold">Agregar Producto</h3>
+          <p className="text-sm opacity-90">Crear nuevo producto</p>
+        </button>
+
+        <button
+          onClick={() => setCurrentView('movements')}
+          className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-xl hover:from-orange-600 hover:to-orange-700 transform hover:scale-105 transition-all"
+        >
+          <div className="text-3xl mb-2">📋</div>
+          <h3 className="text-lg font-semibold">Ver Movimientos</h3>
+          <p className="text-sm opacity-90">Historial completo</p>
+        </button>
+      </div>
+
+      {/* Alerts and Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {dashboardStats.low_stock_products && dashboardStats.low_stock_products.length > 0 && (
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg`}>
+            <h3 className="text-lg font-semibold text-red-600 mb-4 flex items-center">
+              <span className="mr-2">⚠️</span>
+              Productos con Stock Bajo
+            </h3>
+            <ul className="space-y-2">
+              {dashboardStats.low_stock_products.map((product, index) => (
+                <li key={index} className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-red-50'} border-l-4 border-red-500`}>
+                  <span className="font-medium">{product}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
-      )}
+        )}
+
+        {dashboardStats.recent_movements && (
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg`}>
+            <h3 className="text-lg font-semibold mb-4 flex items-center">
+              <span className="mr-2">📊</span>
+              Movimientos Recientes
+            </h3>
+            <div className="space-y-3">
+              {dashboardStats.recent_movements.map((movement, index) => (
+                <div key={index} className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'} border-l-4 ${movement.movement_type === 'entry' ? 'border-green-500' : 'border-red-500'}`}>
+                  <div className="flex justify-between items-center">
+                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                      movement.movement_type === 'entry' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {movement.movement_type === 'entry' ? '↗️ Entrada' : '↙️ Salida'}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {new Date(movement.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p className="text-sm mt-1">
+                    Piezas: {movement.quantity_pieces} | Pallets: {movement.quantity_pallets}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 
   const ProductsView = () => (
-    <div className="p-6">
-      <h2 className="text-3xl font-bold mb-6 text-gray-800">Gestión de Productos</h2>
+    <div className={`p-6 min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50'}`}>
+      <h2 className="text-3xl font-bold mb-6">Gestión de Productos</h2>
       
       {/* Add Product Form */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg mb-8`}>
         <h3 className="text-xl font-semibold mb-4">Agregar Nuevo Producto</h3>
         <form onSubmit={createProduct} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input
@@ -380,7 +609,7 @@ function App() {
             placeholder="Nombre del producto"
             value={productForm.name}
             onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             required
           />
           
@@ -389,7 +618,7 @@ function App() {
             placeholder="Descripción"
             value={productForm.description}
             onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
           />
           
           <div className="flex space-x-2">
@@ -398,7 +627,7 @@ function App() {
               placeholder="Código de barras"
               value={productForm.barcode}
               onChange={(e) => setProductForm({ ...productForm, barcode: e.target.value })}
-              className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              className={`flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             />
             <select
               onChange={(e) => generateBarcode(e.target.value)}
@@ -416,7 +645,7 @@ function App() {
             placeholder="Piezas por pallet (opcional)"
             value={productForm.pieces_per_pallet}
             onChange={(e) => setProductForm({ ...productForm, pieces_per_pallet: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
           />
           
           <input
@@ -424,7 +653,7 @@ function App() {
             placeholder="Alerta de stock mínimo"
             value={productForm.min_stock_alert}
             onChange={(e) => setProductForm({ ...productForm, min_stock_alert: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
           />
           
           <input
@@ -433,7 +662,7 @@ function App() {
             placeholder="Precio por pieza"
             value={productForm.price_per_piece}
             onChange={(e) => setProductForm({ ...productForm, price_per_piece: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
           />
           
           <input
@@ -441,7 +670,7 @@ function App() {
             placeholder="Categoría"
             value={productForm.category}
             onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
           />
           
           <div className="md:col-span-2">
@@ -457,11 +686,11 @@ function App() {
       </div>
 
       {/* Products List */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <h3 className="text-xl font-semibold p-6 border-b">Lista de Productos</h3>
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg overflow-hidden`}>
+        <h3 className="text-xl font-semibold p-6 border-b border-gray-200">Lista de Productos</h3>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
@@ -469,11 +698,12 @@ function App() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock Pallets</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoría</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {products.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50">
+                <tr key={product.id} className={`hover:${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
                   <td className="px-6 py-4 whitespace-nowrap font-medium">{product.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{product.barcode}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{product.current_stock_pieces}</td>
@@ -488,6 +718,14 @@ function App() {
                       {product.current_stock_pieces <= product.min_stock_alert ? 'Stock Bajo' : 'Normal'}
                     </span>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button
+                      onClick={() => deleteProduct(product.id, product.name)}
+                      className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
+                    >
+                      🗑️ Eliminar
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -498,17 +736,60 @@ function App() {
   );
 
   const MovementsView = () => (
-    <div className="p-6">
-      <h2 className="text-3xl font-bold mb-6 text-gray-800">Movimientos de Inventario</h2>
+    <div className={`p-6 min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50'}`}>
+      <h2 className="text-3xl font-bold mb-6">Movimientos de Inventario</h2>
       
+      {/* Movement Type Selection */}
+      <div className="mb-6">
+        <div className="flex space-x-4">
+          <button
+            onClick={() => setMovementForm({ ...movementForm, movement_type: 'entry' })}
+            className={`px-6 py-3 rounded-lg font-medium ${
+              movementForm.movement_type === 'entry'
+                ? 'bg-green-600 text-white'
+                : (darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700')
+            }`}
+          >
+            📥 Entrada (Pallets)
+          </button>
+          <button
+            onClick={() => setMovementForm({ ...movementForm, movement_type: 'exit' })}
+            className={`px-6 py-3 rounded-lg font-medium ${
+              movementForm.movement_type === 'exit'
+                ? 'bg-red-600 text-white'
+                : (darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700')
+            }`}
+          >
+            📤 Salida (Pallets)
+          </button>
+        </div>
+      </div>
+      
+      {/* Product Selection via Scanner */}
+      {selectedProduct && (
+        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-4 rounded-lg mb-6 border-l-4 border-blue-500`}>
+          <h4 className="font-semibold text-blue-600">Producto Seleccionado:</h4>
+          <p className="text-lg font-medium">{selectedProduct.name}</p>
+          <p className="text-sm text-gray-600">Código: {selectedProduct.barcode}</p>
+          <p className="text-sm text-gray-600">
+            Stock actual: {selectedProduct.current_stock_pieces} piezas, {selectedProduct.current_stock_pallets} pallets
+          </p>
+          {selectedProduct.pieces_per_pallet && (
+            <p className="text-sm text-gray-600">Piezas por pallet: {selectedProduct.pieces_per_pallet}</p>
+          )}
+        </div>
+      )}
+
       {/* Add Movement Form */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h3 className="text-xl font-semibold mb-4">Registrar Movimiento</h3>
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg mb-8`}>
+        <h3 className="text-xl font-semibold mb-4">
+          {movementForm.movement_type === 'entry' ? '📥 Registrar Entrada de Pallets' : '📤 Registrar Salida de Pallets'}
+        </h3>
         <form onSubmit={createMovement} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <select
             value={movementForm.product_id}
             onChange={(e) => setMovementForm({ ...movementForm, product_id: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             required
           >
             <option value="">Seleccionar producto</option>
@@ -519,30 +800,33 @@ function App() {
             ))}
           </select>
           
-          <select
-            value={movementForm.movement_type}
-            onChange={(e) => setMovementForm({ ...movementForm, movement_type: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="entry">Entrada</option>
-            <option value="exit">Salida</option>
-          </select>
-          
           <input
             type="number"
-            placeholder="Cantidad en piezas"
-            value={movementForm.quantity_pieces}
-            onChange={(e) => setMovementForm({ ...movementForm, quantity_pieces: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            placeholder={movementForm.movement_type === 'entry' ? "Número de pallets recibidos" : "Número de pallets enviados"}
+            value={movementForm.quantity_pallets}
+            onChange={(e) => {
+              const pallets = parseInt(e.target.value) || 0;
+              const product = products.find(p => p.id === movementForm.product_id);
+              let pieces = 0;
+              if (product && product.pieces_per_pallet) {
+                pieces = pallets * product.pieces_per_pallet;
+              }
+              setMovementForm({ 
+                ...movementForm, 
+                quantity_pallets: e.target.value,
+                quantity_pieces: pieces.toString()
+              });
+            }}
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             required
           />
           
           <input
             type="number"
-            placeholder="Cantidad en pallets"
-            value={movementForm.quantity_pallets}
-            onChange={(e) => setMovementForm({ ...movementForm, quantity_pallets: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            placeholder="Piezas (calculado automáticamente)"
+            value={movementForm.quantity_pieces}
+            onChange={(e) => setMovementForm({ ...movementForm, quantity_pieces: e.target.value })}
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
           />
           
           <input
@@ -550,7 +834,7 @@ function App() {
             placeholder="Razón del movimiento"
             value={movementForm.movement_reason}
             onChange={(e) => setMovementForm({ ...movementForm, movement_reason: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
           />
           
           <input
@@ -558,33 +842,46 @@ function App() {
             placeholder="Código escaneado (opcional)"
             value={movementForm.barcode_scanned}
             onChange={(e) => setMovementForm({ ...movementForm, barcode_scanned: e.target.value })}
-            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className={`p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
           />
           
-          <div className="md:col-span-2">
+          <div className="flex space-x-2">
+            <button
+              type="button"
+              onClick={() => setCurrentView('scanner')}
+              className="bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700"
+            >
+              📱 Escanear
+            </button>
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className={`flex-1 py-3 px-6 rounded-lg text-white disabled:opacity-50 ${
+                movementForm.movement_type === 'entry' 
+                  ? 'bg-green-600 hover:bg-green-700' 
+                  : 'bg-red-600 hover:bg-red-700'
+              }`}
             >
-              {loading ? 'Registrando...' : 'Registrar Movimiento'}
+              {loading ? 'Registrando...' : 
+                (movementForm.movement_type === 'entry' ? 'Registrar Entrada' : 'Registrar Salida')
+              }
             </button>
           </div>
         </form>
       </div>
 
       {/* Movements List */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <h3 className="text-xl font-semibold p-6 border-b">Historial de Movimientos</h3>
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg overflow-hidden`}>
+        <h3 className="text-xl font-semibold p-6 border-b border-gray-200">Historial de Movimientos</h3>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Piezas</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pallets</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Piezas</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Razón</th>
               </tr>
             </thead>
@@ -592,7 +889,7 @@ function App() {
               {movements.map((movement) => {
                 const product = products.find(p => p.id === movement.product_id);
                 return (
-                  <tr key={movement.id} className="hover:bg-gray-50">
+                  <tr key={movement.id} className={`hover:${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {new Date(movement.created_at).toLocaleDateString()}
                     </td>
@@ -602,14 +899,14 @@ function App() {
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {movement.movement_type === 'entry' ? 'Entrada' : 'Salida'}
+                        {movement.movement_type === 'entry' ? '📥 Entrada' : '📤 Salida'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap font-medium">
                       {product ? product.name : 'Producto no encontrado'}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap font-bold text-lg">{movement.quantity_pallets}</td>
                     <td className="px-6 py-4 whitespace-nowrap">{movement.quantity_pieces}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{movement.quantity_pallets}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {movement.movement_reason}
                     </td>
@@ -624,12 +921,12 @@ function App() {
   );
 
   const ScannerView = () => (
-    <div className="p-6">
-      <h2 className="text-3xl font-bold mb-6 text-gray-800">Escáner de Códigos de Barras</h2>
+    <div className={`p-6 min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50'}`}>
+      <h2 className="text-3xl font-bold mb-6">Escáner de Códigos de Barras</h2>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Manual Scanner */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg`}>
           <h3 className="text-xl font-semibold mb-4 flex items-center">
             <span className="mr-2">📝</span>
             Escáner Manual
@@ -641,7 +938,7 @@ function App() {
               value={manualBarcode}
               onChange={(e) => setManualBarcode(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleManualBarcodeSubmit()}
-              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-lg"
+              className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             />
             <button
               onClick={handleManualBarcodeSubmit}
@@ -653,7 +950,7 @@ function App() {
         </div>
 
         {/* Camera Scanner */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg`}>
           <h3 className="text-xl font-semibold mb-4 flex items-center">
             <span className="mr-2">📷</span>
             Escáner con Cámara
@@ -661,7 +958,7 @@ function App() {
           <div className="text-center">
             {!scannerActive ? (
               <>
-                <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-8 mb-4">
+                <div className={`${darkMode ? 'bg-gray-700' : 'bg-gray-100'} border-2 border-dashed border-gray-300 rounded-lg p-8 mb-4`}>
                   <p className="text-gray-500">Presiona el botón para activar la cámara</p>
                   <p className="text-sm text-gray-400 mt-2">Asegúrate de permitir el acceso a la cámara</p>
                 </div>
@@ -694,7 +991,7 @@ function App() {
       </div>
 
       {/* Barcode Generator Section */}
-      <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
+      <div className={`mt-8 ${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg`}>
         <h3 className="text-xl font-semibold mb-4">Generador de Códigos de Barras</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -722,7 +1019,7 @@ function App() {
               </button>
             </div>
             {generatedBarcode && (
-              <div className="bg-gray-50 p-4 rounded-lg">
+              <div className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'} p-4 rounded-lg`}>
                 <p className="text-sm text-gray-600 mb-2">Código generado:</p>
                 <p className="font-mono text-lg font-bold">{generatedBarcode}</p>
                 <button
@@ -730,7 +1027,7 @@ function App() {
                     navigator.clipboard.writeText(generatedBarcode);
                     alert('Código copiado al portapapeles');
                   }}
-                  className="mt-2 text-sm bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
+                  className={`mt-2 text-sm px-3 py-1 rounded ${darkMode ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'}`}
                 >
                   Copiar
                 </button>
@@ -741,7 +1038,7 @@ function App() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Vista previa del código:
             </label>
-            <div className="barcode-container">
+            <div className={`barcode-container ${darkMode ? 'bg-gray-700' : 'bg-white'}`}>
               {generatedBarcode ? (
                 <>
                   <canvas ref={barcodeRef} className="mb-2"></canvas>
@@ -764,21 +1061,21 @@ function App() {
       </div>
 
       {/* Quick Actions */}
-      <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
+      <div className={`mt-8 ${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg`}>
         <h3 className="text-xl font-semibold mb-4">Acciones Rápidas</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
             onClick={() => setCurrentView('movements')}
             className="bg-green-600 text-white py-4 px-6 rounded-lg hover:bg-green-700 flex items-center justify-center"
           >
-            <span className="mr-2">➕</span>
+            <span className="mr-2">📥</span>
             Registrar Entrada
           </button>
           <button
             onClick={() => setCurrentView('movements')}
             className="bg-red-600 text-white py-4 px-6 rounded-lg hover:bg-red-700 flex items-center justify-center"
           >
-            <span className="mr-2">➖</span>
+            <span className="mr-2">📤</span>
             Registrar Salida
           </button>
           <button
@@ -794,10 +1091,10 @@ function App() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${darkMode ? 'dark' : ''}`}>
       <Navigation />
       
-      <main className="container mx-auto">
+      <main>
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'products' && <ProductsView />}
         {currentView === 'movements' && <MovementsView />}
