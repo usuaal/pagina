@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Quagga from 'quagga';
+import JsBarcode from 'jsbarcode';
 import './App.css';
 
 function App() {
