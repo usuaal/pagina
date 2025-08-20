@@ -1,9 +1,314 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
 import Quagga from 'quagga';
 import JsBarcode from 'jsbarcode';
 import './App.css';
 
-function App() {
+// Auth Context
+const AuthContext = createContext();
+
+const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(true);
+
+  const API_URL = process.env.REACT_APP_BACKEND_URL;
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (token) {
+        try {
+          const response = await fetch(`${API_URL}/api/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            const userData = await response.json();
+            setUser(userData);
+          } else {
+            localStorage.removeItem('token');
+            setToken(null);
+          }
+        } catch (error) {
+          console.error('Auth check failed:', error);
+          localStorage.removeItem('token');
+          setToken(null);
+        }
+      }
+      setLoading(false);
+    };
+
+    checkAuth();
+  }, [token, API_URL]);
+
+  const login = async (username, password) => {
+    try {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setToken(data.token);
+        setUser(data.user);
+        localStorage.setItem('token', data.token);
+        return { success: true };
+      } else {
+        const error = await response.json();
+        return { success: false, error: error.detail };
+      }
+    } catch (error) {
+      return { success: false, error: 'Error de conexión' };
+    }
+  };
+
+  const register = async (userData) => {
+    try {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setToken(data.token);
+        setUser(data.user);
+        localStorage.setItem('token', data.token);
+        return { success: true };
+      } else {
+        const error = await response.json();
+        return { success: false, error: error.detail };
+      }
+    } catch (error) {
+      return { success: false, error: 'Error de conexión' };
+    }
+  };
+
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('token');
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+// Login Component
+const LoginForm = ({ onToggleRegister }) => {
+  const [formData, setFormData] = useState({
+    username: '',
+    password: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { login } = useAuth();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const result = await login(formData.username, formData.password);
+    
+    if (!result.success) {
+      setError(result.error);
+    }
+    
+    setLoading(false);
+  };
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
+            Iniciar Sesión
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Sistema de Inventario
+          </p>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
+          
+          <div className="space-y-4">
+            <input
+              type="text"
+              placeholder="Usuario"
+              value={formData.username}
+              onChange={(e) => handleChange('username', e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+            <input
+              type="password"
+              placeholder="Contraseña"
+              value={formData.password}
+              onChange={(e) => handleChange('password', e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loading ? 'Iniciando...' : 'Iniciar Sesión'}
+          </button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={onToggleRegister}
+              className="text-blue-600 hover:text-blue-800"
+            >
+              ¿No tienes cuenta? Regístrate
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Register Component
+const RegisterForm = ({ onToggleLogin }) => {
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    full_name: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { register } = useAuth();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const result = await register(formData);
+    
+    if (!result.success) {
+      setError(result.error);
+    }
+    
+    setLoading(false);
+  };
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
+            Crear Cuenta
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Sistema de Inventario
+          </p>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
+          
+          <div className="space-y-4">
+            <input
+              type="text"
+              placeholder="Nombre completo"
+              value={formData.full_name}
+              onChange={(e) => handleChange('full_name', e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+            <input
+              type="text"
+              placeholder="Usuario"
+              value={formData.username}
+              onChange={(e) => handleChange('username', e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+            <input
+              type="email"
+              placeholder="Email"
+              value={formData.email}
+              onChange={(e) => handleChange('email', e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+            <input
+              type="password"
+              placeholder="Contraseña"
+              value={formData.password}
+              onChange={(e) => handleChange('password', e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50"
+          >
+            {loading ? 'Creando...' : 'Crear Cuenta'}
+          </button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={onToggleLogin}
+              className="text-blue-600 hover:text-blue-800"
+            >
+              ¿Ya tienes cuenta? Inicia sesión
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Main App Component
+function InventoryApp() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [products, setProducts] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -11,7 +316,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   
-  // Product form states
+  // Product form states - using object spread to prevent re-render issues
   const [productForm, setProductForm] = useState({
     name: '',
     description: '',
@@ -41,14 +346,23 @@ function App() {
   const scannerRef = useRef(null);
   const barcodeRef = useRef(null);
   
+  const { user, token, logout } = useAuth();
   const API_URL = process.env.REACT_APP_BACKEND_URL;
+
+  // API headers with authentication
+  const apiHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
 
   // Load initial data
   useEffect(() => {
-    loadProducts();
-    loadMovements();
-    loadDashboard();
-  }, []);
+    if (token) {
+      loadProducts();
+      loadMovements();
+      loadDashboard();
+    }
+  }, [token]);
 
   // Dark mode effect
   useEffect(() => {
@@ -61,9 +375,13 @@ function App() {
 
   const loadProducts = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/products`);
-      const data = await response.json();
-      setProducts(data);
+      const response = await fetch(`${API_URL}/api/products`, {
+        headers: apiHeaders
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProducts(data);
+      }
     } catch (error) {
       console.error('Error loading products:', error);
     }
@@ -71,9 +389,13 @@ function App() {
 
   const loadMovements = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/movements`);
-      const data = await response.json();
-      setMovements(data);
+      const response = await fetch(`${API_URL}/api/movements`, {
+        headers: apiHeaders
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMovements(data);
+      }
     } catch (error) {
       console.error('Error loading movements:', error);
     }
@@ -81,9 +403,13 @@ function App() {
 
   const loadDashboard = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/dashboard`);
-      const data = await response.json();
-      setDashboardStats(data);
+      const response = await fetch(`${API_URL}/api/dashboard`, {
+        headers: apiHeaders
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setDashboardStats(data);
+      }
     } catch (error) {
       console.error('Error loading dashboard:', error);
     }
@@ -91,11 +417,15 @@ function App() {
 
   const generateBarcode = async (format) => {
     try {
-      const response = await fetch(`${API_URL}/api/generate-barcode/${format}`);
-      const data = await response.json();
-      setProductForm(prev => ({ ...prev, barcode: data.barcode }));
-      setGeneratedBarcode(data.barcode);
-      setBarcodeFormat(data.format);
+      const response = await fetch(`${API_URL}/api/generate-barcode/${format}`, {
+        headers: apiHeaders
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProductForm(prev => ({ ...prev, barcode: data.barcode }));
+        setGeneratedBarcode(data.barcode);
+        setBarcodeFormat(data.format);
+      }
     } catch (error) {
       console.error('Error generating barcode:', error);
     }
@@ -107,9 +437,7 @@ function App() {
     try {
       const response = await fetch(`${API_URL}/api/products`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: apiHeaders,
         body: JSON.stringify({
           ...productForm,
           pieces_per_pallet: productForm.pieces_per_pallet ? parseInt(productForm.pieces_per_pallet) : null,
@@ -147,6 +475,7 @@ function App() {
       try {
         const response = await fetch(`${API_URL}/api/products/${productId}`, {
           method: 'DELETE',
+          headers: apiHeaders
         });
         
         if (response.ok) {
@@ -169,9 +498,7 @@ function App() {
     try {
       const response = await fetch(`${API_URL}/api/movements`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: apiHeaders,
         body: JSON.stringify({
           ...movementForm,
           quantity_pieces: parseInt(movementForm.quantity_pieces || 0),
@@ -203,11 +530,12 @@ function App() {
 
   const searchProductByBarcode = useCallback(async (barcode) => {
     try {
-      const response = await fetch(`${API_URL}/api/products/barcode/${barcode}`);
+      const response = await fetch(`${API_URL}/api/products/barcode/${barcode}`, {
+        headers: apiHeaders
+      });
       if (response.ok) {
         const product = await response.json();
         setSelectedProduct(product);
-        // Actualizar el formulario correctamente
         setMovementForm(prev => ({ 
           ...prev, 
           product_id: product.id, 
@@ -224,7 +552,7 @@ function App() {
       alert('Error al buscar el producto');
       return null;
     }
-  }, [API_URL]);
+  }, [API_URL, apiHeaders]);
 
   const handleManualBarcodeSubmit = useCallback(() => {
     if (manualBarcode.trim()) {
@@ -383,18 +711,21 @@ function App() {
     printWindow.print();
   };
 
-  // Handle input changes properly to fix typing bug
-  const handleProductFormChange = (field, value) => {
-    setProductForm(prev => ({ ...prev, [field]: value }));
-  };
+  // Handle input changes with proper state management to fix typing issues
+  const updateProductForm = useCallback((field, value) => {
+    setProductForm(prevForm => ({
+      ...prevForm,
+      [field]: value
+    }));
+  }, []);
 
-  const handleMovementFormChange = (field, value) => {
-    setMovementForm(prev => {
-      const newForm = { ...prev, [field]: value };
+  const updateMovementForm = useCallback((field, value) => {
+    setMovementForm(prevForm => {
+      const newForm = { ...prevForm, [field]: value };
       
       // Auto-calculate pieces when pallets change
       if (field === 'quantity_pallets') {
-        const product = products.find(p => p.id === prev.product_id);
+        const product = products.find(p => p.id === prevForm.product_id);
         if (product && product.pieces_per_pallet) {
           const pallets = parseInt(value) || 0;
           newForm.quantity_pieces = (pallets * product.pieces_per_pallet).toString();
@@ -403,7 +734,7 @@ function App() {
       
       return newForm;
     });
-  };
+  }, [products]);
 
   const Navigation = () => (
     <nav className={`${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-sm border-b`}>
@@ -467,15 +798,26 @@ function App() {
               </button>
             </div>
             
-            {/* Dark mode toggle */}
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className={`p-2 rounded-lg transition-colors ${
-                darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {darkMode ? '☀️' : '🌙'}
-            </button>
+            {/* User info and actions */}
+            <div className="flex items-center space-x-2">
+              <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                {user?.full_name}
+              </span>
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {darkMode ? '☀️' : '🌙'}
+              </button>
+              <button
+                onClick={logout}
+                className="text-sm text-red-600 hover:text-red-700 px-2 py-1 rounded"
+              >
+                Salir
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -560,32 +902,45 @@ function App() {
           </button>
         </div>
 
-        {/* Recent Activity */}
-        {dashboardStats.recent_movements && (
+        {/* Recent Activity - Cleaned up */}
+        {dashboardStats.recent_movements && dashboardStats.recent_movements.length > 0 && (
           <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-lg shadow-sm`}>
             <h3 className={`text-lg font-medium mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               Movimientos Recientes
             </h3>
             <div className="space-y-3">
-              {dashboardStats.recent_movements.map((movement, index) => (
-                <div key={index} className={`p-3 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                  <div className="flex justify-between items-center">
-                    <span className={`text-sm px-2 py-1 rounded ${
-                      movement.movement_type === 'entry' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {movement.movement_type === 'entry' ? 'Entrada' : 'Salida'}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      {new Date(movement.created_at).toLocaleDateString()}
-                    </span>
+              {dashboardStats.recent_movements.map((movement, index) => {
+                const product = products.find(p => p.id === movement.product_id);
+                return (
+                  <div key={index} className={`p-3 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className={`text-sm px-2 py-1 rounded ${
+                            movement.movement_type === 'entry' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {movement.movement_type === 'entry' ? 'Entrada' : 'Salida'}
+                          </span>
+                          <span className="text-sm font-medium">
+                            {movement.user_name}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium">
+                          {product ? product.name : 'Producto eliminado'}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {movement.quantity_pallets} pallets, {movement.quantity_pieces} piezas
+                        </p>
+                      </div>
+                      <span className="text-sm text-gray-500">
+                        {new Date(movement.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm mt-1">
-                    Piezas: {movement.quantity_pieces} | Pallets: {movement.quantity_pallets}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -610,7 +965,7 @@ function App() {
               type="text"
               placeholder="Nombre del producto"
               value={productForm.name}
-              onChange={(e) => handleProductFormChange('name', e.target.value)}
+              onChange={(e) => updateProductForm('name', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
               required
             />
@@ -619,7 +974,7 @@ function App() {
               type="text"
               placeholder="Descripción"
               value={productForm.description}
-              onChange={(e) => handleProductFormChange('description', e.target.value)}
+              onChange={(e) => updateProductForm('description', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             />
             
@@ -628,7 +983,7 @@ function App() {
                 type="text"
                 placeholder="Código de barras"
                 value={productForm.barcode}
-                onChange={(e) => handleProductFormChange('barcode', e.target.value)}
+                onChange={(e) => updateProductForm('barcode', e.target.value)}
                 className={`flex-1 p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
               />
               <select
@@ -646,7 +1001,7 @@ function App() {
               type="number"
               placeholder="Piezas por pallet"
               value={productForm.pieces_per_pallet}
-              onChange={(e) => handleProductFormChange('pieces_per_pallet', e.target.value)}
+              onChange={(e) => updateProductForm('pieces_per_pallet', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             />
             
@@ -654,7 +1009,7 @@ function App() {
               type="number"
               placeholder="Stock mínimo"
               value={productForm.min_stock_alert}
-              onChange={(e) => handleProductFormChange('min_stock_alert', e.target.value)}
+              onChange={(e) => updateProductForm('min_stock_alert', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             />
             
@@ -663,7 +1018,7 @@ function App() {
               step="0.01"
               placeholder="Precio por pieza"
               value={productForm.price_per_piece}
-              onChange={(e) => handleProductFormChange('price_per_piece', e.target.value)}
+              onChange={(e) => updateProductForm('price_per_piece', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             />
             
@@ -671,7 +1026,7 @@ function App() {
               type="text"
               placeholder="Categoría"
               value={productForm.category}
-              onChange={(e) => handleProductFormChange('category', e.target.value)}
+              onChange={(e) => updateProductForm('category', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             />
             
@@ -742,7 +1097,7 @@ function App() {
         <div className="mb-6">
           <div className="flex space-x-2">
             <button
-              onClick={() => handleMovementFormChange('movement_type', 'entry')}
+              onClick={() => updateMovementForm('movement_type', 'entry')}
               className={`px-4 py-2 rounded-lg text-sm font-medium ${
                 movementForm.movement_type === 'entry'
                   ? 'bg-green-600 text-white'
@@ -752,7 +1107,7 @@ function App() {
               Entrada
             </button>
             <button
-              onClick={() => handleMovementFormChange('movement_type', 'exit')}
+              onClick={() => updateMovementForm('movement_type', 'exit')}
               className={`px-4 py-2 rounded-lg text-sm font-medium ${
                 movementForm.movement_type === 'exit'
                   ? 'bg-red-600 text-white'
@@ -784,7 +1139,7 @@ function App() {
           <form onSubmit={createMovement} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <select
               value={movementForm.product_id}
-              onChange={(e) => handleMovementFormChange('product_id', e.target.value)}
+              onChange={(e) => updateMovementForm('product_id', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
               required
             >
@@ -800,7 +1155,7 @@ function App() {
               type="number"
               placeholder="Número de pallets"
               value={movementForm.quantity_pallets}
-              onChange={(e) => handleMovementFormChange('quantity_pallets', e.target.value)}
+              onChange={(e) => updateMovementForm('quantity_pallets', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
               required
             />
@@ -809,7 +1164,7 @@ function App() {
               type="number"
               placeholder="Piezas (calculado automáticamente)"
               value={movementForm.quantity_pieces}
-              onChange={(e) => handleMovementFormChange('quantity_pieces', e.target.value)}
+              onChange={(e) => updateMovementForm('quantity_pieces', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             />
             
@@ -817,7 +1172,7 @@ function App() {
               type="text"
               placeholder="Razón del movimiento"
               value={movementForm.movement_reason}
-              onChange={(e) => handleMovementFormChange('movement_reason', e.target.value)}
+              onChange={(e) => updateMovementForm('movement_reason', e.target.value)}
               className={`p-3 border rounded-lg ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             />
             
@@ -851,6 +1206,7 @@ function App() {
               <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidad</th>
@@ -864,6 +1220,9 @@ function App() {
                       <td className="px-6 py-4 text-sm">
                         {new Date(movement.created_at).toLocaleDateString()}
                       </td>
+                      <td className="px-6 py-4 text-sm font-medium">
+                        {movement.user_name}
+                      </td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-1 text-xs rounded ${
                           movement.movement_type === 'entry' 
@@ -874,7 +1233,7 @@ function App() {
                         </span>
                       </td>
                       <td className={`px-6 py-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {product ? product.name : 'Producto no encontrado'}
+                        {product ? product.name : 'Producto eliminado'}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <div>{movement.quantity_pallets} pallets</div>
@@ -1032,6 +1391,42 @@ function App() {
       </main>
     </div>
   );
+}
+
+// Main App with Auth
+function App() {
+  const [showRegister, setShowRegister] = useState(false);
+  
+  return (
+    <AuthProvider>
+      <AuthContent showRegister={showRegister} setShowRegister={setShowRegister} />
+    </AuthProvider>
+  );
+}
+
+function AuthContent({ showRegister, setShowRegister }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return showRegister ? (
+      <RegisterForm onToggleLogin={() => setShowRegister(false)} />
+    ) : (
+      <LoginForm onToggleRegister={() => setShowRegister(true)} />
+    );
+  }
+
+  return <InventoryApp />;
 }
 
 export default App;
