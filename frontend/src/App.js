@@ -85,6 +85,8 @@ function App() {
       const response = await fetch(`${API_URL}/api/generate-barcode/${format}`);
       const data = await response.json();
       setProductForm({ ...productForm, barcode: data.barcode });
+      setGeneratedBarcode(data.barcode);
+      setBarcodeFormat(data.format);
     } catch (error) {
       console.error('Error generating barcode:', error);
     }
